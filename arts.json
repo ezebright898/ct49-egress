@@ -1,0 +1,25 @@
+{
+  "total_count": 1,
+  "artifacts": [
+    {
+      "id": 14288946364,
+      "node_id": "MDg6QXJ0aWZhY3QxNDI4ODk0NjM2NA==",
+      "name": "ct49-portmap",
+      "size_in_bytes": 5876,
+      "url": "https://api.github.com/repos/ezebright898/ct49-egress/actions/artifacts/14288946364",
+      "archive_download_url": "https://api.github.com/repos/ezebright898/ct49-egress/actions/artifacts/14288946364/zip",
+      "expired": false,
+      "digest": "sha256:0bc1b37bb2aa64dddb8d971cb79e09099baa3d67cc7364244ac65f6410ed2833",
+      "created_at": "2026-11-17T01:07:52Z",
+      "updated_at": "2026-11-17T01:07:52Z",
+      "expires_at": "2026-11-20T01:07:51Z",
+      "workflow_run": {
+        "id": 43992885935,
+        "repository_id": 1460751572,
+        "head_repository_id": 1460751572,
+        "head_branch": "main",
+        "head_sha": "80e57c08cb8636202e5fdc00815c1b7fcfa9b087"
+      }
+    }
+  ]
+}

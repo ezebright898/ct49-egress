@@ -62,13 +62,21 @@ def tcp_probe(host, port):
 
 
 def http_probe(url, extra=None, resolve=None, method="GET", data=None):
-    hdrs = os.path.join(DEEP, "h.tmp")
-    body = os.path.join(DEEP, "b.tmp")
-    for f in (hdrs, body):
-        try:
-            os.remove(f)
-        except Exception:
-            pass
+    import tempfile, threading
+    fd1, hdrs = tempfile.mkstemp(dir=DEEP, prefix="h_")
+    fd2, body = tempfile.mkstemp(dir=DEEP, prefix="b_")
+    os.close(fd1); os.close(fd2)
+    try:
+        return _http_probe(url, hdrs, body, extra, resolve, method, data)
+    finally:
+        for f in (hdrs, body):
+            try:
+                os.remove(f)
+            except Exception:
+                pass
+
+
+def _http_probe(url, hdrs, body, extra=None, resolve=None, method="GET", data=None):
     cmd = ["curl", "-k", "-sS", "-m", "8", "--connect-timeout", "4", "-A", UA,
            "-D", hdrs, "-o", body, "-X", method]
     for hm in (resolve or []):
@@ -107,6 +115,55 @@ def http_probe(url, extra=None, resolve=None, method="GET", data=None):
     if err.strip():
         res["stderr"] = err.strip()[:200]
     return res
+
+
+def sh(cmd, timeout=15, inp=b""):
+    try:
+        pr = subprocess.run(cmd, input=inp, capture_output=True, timeout=timeout)
+        return pr.returncode, pr.stdout.decode("latin1", "replace"), pr.stderr.decode("latin1", "replace")
+    except subprocess.TimeoutExpired:
+        return -9, "", "TIMEOUT"
+
+
+def tls_info(host, port, servername=None):
+    cmd = ["openssl", "s_client", "-connect", f"{host}:{port}", "-showcerts"]
+    if servername:
+        cmd += ["-servername", servername]
+    rc, out, err = sh(cmd, timeout=18)
+    info = {"sni": servername, "rc": rc, "handshake_err": (err or "").strip().splitlines()[-1][:120] if err.strip() else None}
+    m = re.search(r"(-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----)", out, re.S)
+    if m:
+        rc2, out2, err2 = sh(["openssl", "x509", "-noout", "-subject", "-issuer", "-ext", "subjectAltName"], inp=m.group(1).encode())
+        info["cert"] = out2.strip()[:600]
+    for ln in (out or "").splitlines():
+        if ln.startswith(("subject=", "issuer=")):
+            info.setdefault("brief", []).append(ln[:160])
+    return info
+
+
+def sni_matrix(host, snis):
+    out = []
+    for sni in snis:
+        hn = sni or host
+        r = http_probe(f"https://{hn}/", extra=([f"Host: {sni}"] if sni else None),
+                       resolve=[f"{hn}:443:{host}"])
+        out.append({"sni": sni, "status": (r.get("hist") or [None])[0], "rc": r.get("rc"),
+                    "body_len": r.get("body_len"), "head": (r.get("body_head") or "")[:110].replace("\n", " "),
+                    "server": (r.get("headers") or {}).get("server"),
+                    "stderr": (r.get("stderr") or "")[-120:]})
+        time.sleep(0.3)
+    return out
+
+
+def host_header_80(host, hosts):
+    out = []
+    for h in hosts:
+        r = http_probe(f"http://{host}/", extra=[f"Host: {h}"])
+        out.append({"host": h, "status": (r.get("hist") or [None])[0],
+                    "location": (r.get("headers") or {}).get("location"),
+                    "body_len": r.get("body_len"), "head": (r.get("body_head") or "")[:90]})
+        time.sleep(0.25)
+    return out
 
 
 def redis_probe(host, port):
@@ -413,6 +470,55 @@ def main():
         for host, port, d in ex.map(deep_one, open_ports):
             result["targets"][host]["deep"][str(port)] = d
 
+
+    # ---- second pass: hosts with zero open ports -> retry (max 3 attempts per port total) ----
+    result["recheck"] = {}
+    for host in HOSTS:
+        if any(v.get("tcp_open") for v in by_host.get(host, {}).values()):
+            continue
+        rc_list = {}
+        for port in [80, 443, 22, 3000, 8000, 8080, 8200, 9100, 50060]:
+            tries = []
+            for _ in range(2):
+                st = {"tcp_open": False}
+                t0 = time.time()
+                try:
+                    sk = socket.create_connection((host, port), timeout=6.0)
+                    st = {"tcp_open": True, "ms": int((time.time() - t0) * 1000)}
+                    sk.settimeout(1.5)
+                    try:
+                        b = sk.recv(200)
+                        if b:
+                            st["banner"] = b[:200].decode("latin1", "replace")
+                    except Exception:
+                        pass
+                    sk.close()
+                except Exception as e:
+                    st = {"tcp_open": False, "error": f"{type(e).__name__}: {e}"[:90]}
+                tries.append(st)
+                time.sleep(0.4)
+            rc_list[port] = tries
+        result["recheck"][host] = rc_list
+
+    # ---- TLS certificate + SNI routing matrix ----
+    result["tls"] = {}
+    for host, port, snis in [
+        ("129.212.142.60", 443, [None, "traefik.api.cardtonic.com", "api.cardtonic.com"]),
+        ("142.93.160.150", 443, ["t8t.cardtonic.com"]),
+        ("64.227.117.180", 443, ["pilboard.pil.com", "devboard.pil.com"]),
+    ]:
+        result["tls"][f"{host}:{port}"] = [tls_info(host, port, sn) for sn in snis]
+
+    result["sni_matrix_142_60"] = sni_matrix("129.212.142.60", [
+        None, "traefik.api.cardtonic.com", "api.cardtonic.com", "dashboard.cardtonic.com",
+        "toniks.cardtonic.com", "merchant.cardtonic.com", "t8t.cardtonic.com",
+        "pilboard.pil.com", "localhost"])
+    result["host_header_80"] = {
+        "129.212.142.60": host_header_80("129.212.142.60", ["api.cardtonic.com", "toniks.cardtonic.com", "dashboard.cardtonic.com"]),
+        "142.93.160.150": host_header_80("142.93.160.150", ["t8t.cardtonic.com"]),
+        "64.227.117.180": host_header_80("64.227.117.180", ["pilboard.pil.com", "devboard.pil.com"]),
+    }
+
     # vhost re-test on 129.212.142.60:443 (SNI trick)
     if by_host.get("129.212.142.60", {}).get(443, {}).get("tcp_open"):
         result["vhost_142_60_443"] = vhost_probe()
@@ -435,6 +541,21 @@ def main():
     lines.append("\n## vhost @129.212.142.60:443")
     for v in result["vhost_142_60_443"]:
         lines.append(f"  {v['host']:<34} {v['class']:<22} status={v['status']} len={v['body_len']} head={v['body_head'][:60]!r}")
+    lines.append("\n## recheck (hosts with zero open ports)")
+    for host, rl in result.get("recheck", {}).items():
+        for port, tries in rl.items():
+            lines.append(f"  {host} {port}: " + " | ".join(str(t) for t in tries))
+    lines.append("\n## TLS")
+    for k, v in result.get("tls", {}).items():
+        for i in v:
+            lines.append(f"  {k} sni={i.get('sni')} err={i.get('handshake_err')} cert={str(i.get('cert'))[:220]!r}")
+    lines.append("\n## SNI matrix 142.60:443")
+    for i in result.get("sni_matrix_142_60", []):
+        lines.append(f"  sni={i['sni']!s:<32} {i['status']} rc={i['rc']} len={i['body_len']} head={i['head'][:70]!r} err={i['stderr'][-60:]!r}")
+    lines.append("\n## Host header @80")
+    for host, v in result.get("host_header_80", {}).items():
+        for i in v:
+            lines.append(f"  {host} Host={i['host']:<26} {i['status']} loc={i['location']} len={i['body_len']} head={i['head'][:60]!r}")
     txt = "\n".join(lines)
     with open(os.path.join(OUT, "summary.txt"), "w") as f:
         f.write(txt + "\n")

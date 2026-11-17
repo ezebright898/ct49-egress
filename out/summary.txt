@@ -1,0 +1,177 @@
+egress_ip=52.141.65.130 runner=runnervmccnms
+
+## 129.212.142.60 open_tcp=[80,443]
+      22 closed/TimeoutError: timed out
+      80 OPEN conn=122ms banner=''
+     443 OPEN conn=126ms banner=''
+    2375 closed/TimeoutError: timed out
+    2376 closed/TimeoutError: timed out
+    2379 closed/TimeoutError: timed out
+    2380 closed/TimeoutError: timed out
+    3000 closed/TimeoutError: timed out
+    3333 closed/TimeoutError: timed out
+    5000 closed/TimeoutError: timed out
+    5001 closed/TimeoutError: timed out
+    5432 closed/TimeoutError: timed out
+    5601 closed/TimeoutError: timed out
+    5678 closed/TimeoutError: timed out
+    6379 closed/TimeoutError: timed out
+    6443 closed/TimeoutError: timed out
+    7000 closed/TimeoutError: timed out
+    7233 closed/TimeoutError: timed out
+    8000 closed/TimeoutError: timed out
+    8080 closed/TimeoutError: timed out
+    8081 closed/TimeoutError: timed out
+    8200 closed/TimeoutError: timed out
+    8233 closed/TimeoutError: timed out
+    9000 closed/TimeoutError: timed out
+    9090 closed/TimeoutError: timed out
+    9100 closed/TimeoutError: timed out
+    9200 closed/TimeoutError: timed out
+    9229 closed/TimeoutError: timed out
+   10250 closed/TimeoutError: timed out
+   10255 closed/TimeoutError: timed out
+   27017 closed/TimeoutError: timed out
+   50060 closed/TimeoutError: timed out
+   50070 closed/TimeoutError: timed out
+   50075 closed/TimeoutError: timed out
+
+## 129.212.194.148 open_tcp=[]
+      22 closed/TimeoutError: timed out
+      80 closed/TimeoutError: timed out
+     443 closed/TimeoutError: timed out
+    2375 closed/TimeoutError: timed out
+    2376 closed/TimeoutError: timed out
+    2379 closed/TimeoutError: timed out
+    2380 closed/TimeoutError: timed out
+    3000 closed/TimeoutError: timed out
+    3333 closed/TimeoutError: timed out
+    5000 closed/TimeoutError: timed out
+    5001 closed/TimeoutError: timed out
+    5432 closed/TimeoutError: timed out
+    5601 closed/TimeoutError: timed out
+    5678 closed/TimeoutError: timed out
+    6379 closed/TimeoutError: timed out
+    6443 closed/TimeoutError: timed out
+    7000 closed/TimeoutError: timed out
+    7233 closed/TimeoutError: timed out
+    8000 closed/TimeoutError: timed out
+    8080 closed/TimeoutError: timed out
+    8081 closed/TimeoutError: timed out
+    8200 closed/TimeoutError: timed out
+    8233 closed/TimeoutError: timed out
+    9000 closed/TimeoutError: timed out
+    9090 closed/TimeoutError: timed out
+    9100 closed/TimeoutError: timed out
+    9200 closed/TimeoutError: timed out
+    9229 closed/TimeoutError: timed out
+   10250 closed/TimeoutError: timed out
+   10255 closed/TimeoutError: timed out
+   27017 closed/TimeoutError: timed out
+   50060 closed/TimeoutError: timed out
+   50070 closed/TimeoutError: timed out
+   50075 closed/TimeoutError: timed out
+
+## 142.93.160.150 open_tcp=[22,80,443,5678]
+      22 OPEN conn=128ms banner='SSH-2.0-OpenSSH_9.6p1 Ubuntu-3ubuntu13.20\r\n'
+      80 OPEN conn=123ms banner=''
+     443 OPEN conn=135ms banner=''
+    2375 closed/TimeoutError: timed out
+    2376 closed/TimeoutError: timed out
+    2379 closed/TimeoutError: timed out
+    2380 closed/TimeoutError: timed out
+    3000 closed/TimeoutError: timed out
+    3333 closed/TimeoutError: timed out
+    5000 closed/TimeoutError: timed out
+    5001 closed/TimeoutError: timed out
+    5432 closed/TimeoutError: timed out
+    5601 closed/TimeoutError: timed out
+    5678 OPEN conn=124ms banner=''
+    6379 closed/TimeoutError: timed out
+    6443 closed/TimeoutError: timed out
+    7000 closed/TimeoutError: timed out
+    7233 closed/TimeoutError: timed out
+    8000 closed/TimeoutError: timed out
+    8080 closed/TimeoutError: timed out
+    8081 closed/TimeoutError: timed out
+    8200 closed/TimeoutError: timed out
+    8233 closed/TimeoutError: timed out
+    9000 closed/TimeoutError: timed out
+    9090 closed/TimeoutError: timed out
+    9100 closed/TimeoutError: timed out
+    9200 closed/TimeoutError: timed out
+    9229 closed/TimeoutError: timed out
+   10250 closed/TimeoutError: timed out
+   10255 closed/TimeoutError: timed out
+   27017 closed/TimeoutError: timed out
+   50060 closed/TimeoutError: timed out
+   50070 closed/TimeoutError: timed out
+   50075 closed/TimeoutError: timed out
+
+## 64.227.117.180 open_tcp=[22,80,443]
+      22 OPEN conn=121ms banner='SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.18\r\n'
+      80 OPEN conn=121ms banner=''
+     443 OPEN conn=125ms banner=''
+    2375 closed/ConnectionRefusedError: [Errno 111] Connection refused
+    2376 closed/ConnectionRefusedError: [Errno 111] Connection refused
+    2379 closed/TimeoutError: timed out
+    2380 closed/TimeoutError: timed out
+    3000 closed/TimeoutError: timed out
+    3333 closed/TimeoutError: timed out
+    5000 closed/TimeoutError: timed out
+    5001 closed/TimeoutError: timed out
+    5432 closed/TimeoutError: timed out
+    5601 closed/TimeoutError: timed out
+    5678 closed/TimeoutError: timed out
+    6379 closed/TimeoutError: timed out
+    6443 closed/TimeoutError: timed out
+    7000 closed/TimeoutError: timed out
+    7233 closed/TimeoutError: timed out
+    8000 closed/TimeoutError: timed out
+    8080 closed/TimeoutError: timed out
+    8081 closed/TimeoutError: timed out
+    8200 closed/TimeoutError: timed out
+    8233 closed/TimeoutError: timed out
+    9000 closed/TimeoutError: timed out
+    9090 closed/TimeoutError: timed out
+    9100 closed/TimeoutError: timed out
+    9200 closed/TimeoutError: timed out
+    9229 closed/TimeoutError: timed out
+   10250 closed/TimeoutError: timed out
+   10255 closed/TimeoutError: timed out
+   27017 closed/TimeoutError: timed out
+   50060 closed/TimeoutError: timed out
+   50070 closed/TimeoutError: timed out
+   50075 closed/TimeoutError: timed out
+
+## vhost @129.212.142.60:443
+  traefik.api.cardtonic.com          ipAllowList(Forbidden-9B) status=HTTP/2 403 len=9 head='Forbidden'
+  api.cardtonic.com                  no-router(404-19B)     status=HTTP/2 404 len=19 head='404 page not found'
+  dashboard.cardtonic.com            BACKEND                status=HTTP/2 421 len=20 head='Misdirected Request'
+  grafana.api.cardtonic.com          ipAllowList(Forbidden-9B) status=HTTP/2 403 len=9 head='Forbidden'
+  vault.api.cardtonic.com            ipAllowList(Forbidden-9B) status=HTTP/2 403 len=9 head='Forbidden'
+  authentik.api.cardtonic.com        ipAllowList(Forbidden-9B) status=HTTP/2 403 len=9 head='Forbidden'
+  prometheus.api.cardtonic.com       ipAllowList(Forbidden-9B) status=HTTP/2 403 len=9 head='Forbidden'
+  alertmanager.api.cardtonic.com     ipAllowList(Forbidden-9B) status=HTTP/2 403 len=9 head='Forbidden'
+  uptime.api.cardtonic.com           ipAllowList(Forbidden-9B) status=HTTP/2 403 len=9 head='Forbidden'
+  harbor.api.cardtonic.com           ipAllowList(Forbidden-9B) status=HTTP/2 403 len=9 head='Forbidden'
+  toniks.cardtonic.com               BACKEND                status=HTTP/2 302 len=0 head=''
+  merchant.cardtonic.com             BACKEND                status=HTTP/2 421 len=20 head='Misdirected Request'
+  pilboard.pil.com                   no-router(404-19B)     status=HTTP/2 404 len=19 head='404 page not found'
+  devboard.pil.com                   no-router(404-19B)     status=HTTP/2 404 len=19 head='404 page not found'
+  duplik8.cardtonic.com              no-router(404-19B)     status=HTTP/2 404 len=19 head='404 page not found'
+  dupligo.cardtonic.com              no-router(404-19B)     status=HTTP/2 404 len=19 head='404 page not found'
+  temporal.cardtonic.com             no-router(404-19B)     status=HTTP/2 404 len=19 head='404 page not found'
+  wallets.cardtonic.com              no-router(404-19B)     status=HTTP/2 404 len=19 head='404 page not found'
+  payout.cardtonic.com               no-router(404-19B)     status=HTTP/2 404 len=19 head='404 page not found'
+  signer.cardtonic.com               no-router(404-19B)     status=HTTP/2 404 len=19 head='404 page not found'
+  recon.cardtonic.com                no-router(404-19B)     status=HTTP/2 404 len=19 head='404 page not found'
+  board.cardtonic.com                no-router(404-19B)     status=HTTP/2 404 len=19 head='404 page not found'
+  bullboard.cardtonic.com            no-router(404-19B)     status=HTTP/2 404 len=19 head='404 page not found'
+  worker.cardtonic.com               no-router(404-19B)     status=HTTP/2 404 len=19 head='404 page not found'
+  cron.cardtonic.com                 no-router(404-19B)     status=HTTP/2 404 len=19 head='404 page not found'
+  internal.cardtonic.com             no-router(404-19B)     status=HTTP/2 404 len=19 head='404 page not found'
+  admin.cardtonic.com                no-router(404-19B)     status=HTTP/2 404 len=19 head='404 page not found'
+  gateway.cardtonic.com              no-router(404-19B)     status=HTTP/2 404 len=19 head='404 page not found'
+  vpnzy.cardtonic.com                no-router(404-19B)     status=HTTP/2 404 len=19 head='404 page not found'
+  boss.cardtonic.com                 no-router(404-19B)     status=HTTP/2 404 len=19 head='404 page not found'

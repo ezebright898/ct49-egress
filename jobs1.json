@@ -1,0 +1,89 @@
+{
+  "total_count": 1,
+  "jobs": [
+    {
+      "id": 133737666382,
+      "run_id": 43992885935,
+      "workflow_name": "ct49-egress-portmap",
+      "head_branch": "main",
+      "run_url": "https://api.github.com/repos/ezebright898/ct49-egress/actions/runs/43992885935",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOVxFM1M8AAAAfI2LXTg",
+      "head_sha": "80e57c08cb8636202e5fdc00815c1b7fcfa9b087",
+      "url": "https://api.github.com/repos/ezebright898/ct49-egress/actions/jobs/133737666382",
+      "html_url": "https://github.com/ezebright898/ct49-egress/actions/runs/43992885935/job/133737666382",
+      "status": "in_progress",
+      "conclusion": null,
+      "created_at": "2026-11-17T01:05:48Z",
+      "started_at": "2026-11-17T01:05:51Z",
+      "completed_at": null,
+      "name": "portmap",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-17T01:05:52Z",
+          "completed_at": "2026-11-17T01:05:52Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-17T01:05:52Z",
+          "completed_at": "2026-11-17T01:05:53Z"
+        },
+        {
+          "name": "deps",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-17T01:05:53Z",
+          "completed_at": "2026-11-17T01:05:55Z"
+        },
+        {
+          "name": "probe",
+          "status": "in_progress",
+          "conclusion": null,
+          "number": 4,
+          "started_at": "2026-11-17T01:05:55Z",
+          "completed_at": null
+        },
+        {
+          "name": "upload",
+          "status": "pending",
+          "conclusion": null,
+          "number": 5,
+          "started_at": null,
+          "completed_at": null
+        },
+        {
+          "name": "job summary",
+          "status": "pending",
+          "conclusion": null,
+          "number": 6,
+          "started_at": null,
+          "completed_at": null
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "pending",
+          "conclusion": null,
+          "number": 12,
+          "started_at": null,
+          "completed_at": null
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/ezebright898/ct49-egress/check-runs/133737666382",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "runner_id": 1000000000,
+      "runner_name": "GitHub Actions 1000000000",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    }
+  ]
+}
