@@ -440,6 +440,18 @@ with sync_playwright() as p:
                     pass
             if res["verdict"] is None:
                 res["verdict"] = res["attempts"][-1]["verdict"] if res["attempts"] else "NO_ATTEMPTS"
+            if res["verdict"] == "WRONG_PASSWORD":
+                try:
+                    pg.goto("https://accounts.google.com/signin/recovery?hl=en",
+                            timeout=60000, wait_until="domcontentloaded")
+                    pg.wait_for_timeout(5500)
+                    if captcha(txt(pg)):
+                        solve_captcha(pg, f"{LABEL}_recov")
+                    snap(pg, "recovery")
+                    res["recovery_page"] = {"url": pg.url,
+                                            "text": re.sub(r'\n{3,}', '\n\n', txt(pg))[:5000]}
+                except Exception as e:
+                    res["recovery_page"] = {"err": str(e)[:250]}
         else:
             res["verdict"] = st
 
