@@ -14,13 +14,21 @@ if not os.environ.get("DISPLAY"):
     except Exception as e:
         print("xvfb err", e, flush=True)
 
-for cmd in (["python3", "-m", "pip", "install", "--quiet", "playwright"],
-            ["python3", "-m", "playwright", "install", "--with-deps", "chromium"]):
+print("PY", sys.executable, sys.version, flush=True)
+PWLIB = os.path.abspath("pwlib")
+os.makedirs(PWLIB, exist_ok=True)
+for cmd in ([sys.executable, "-m", "pip", "install", "--quiet", "--target", PWLIB, "playwright"],
+            [sys.executable, "-m", "playwright", "install", "chromium"]):
     print("+", " ".join(cmd), flush=True)
-    r = subprocess.run(cmd, capture_output=True, text=True)
-    print("  rc=", r.returncode, (r.stdout or "")[-300:], (r.stderr or "")[-300:], flush=True)
-
-from playwright.sync_api import sync_playwright  # noqa: E402
+    r = subprocess.run(cmd, capture_output=True, text=True, env=dict(os.environ, PYTHONPATH=PWLIB))
+    print("  rc=", r.returncode, (r.stdout or "")[-400:], (r.stderr or "")[-400:], flush=True)
+sys.path.insert(0, PWLIB)
+try:
+    from playwright.sync_api import sync_playwright
+except Exception as e:
+    print("IMPORT FAIL", e, flush=True)
+    subprocess.run([sys.executable, "-m", "pip", "install", "--target", PWLIB, "playwright"], env=dict(os.environ, PYTHONPATH=PWLIB))
+    from playwright.sync_api import sync_playwright
 
 EMAIL = "adelekeadenijio@gmail.com"
 CANDS = [
