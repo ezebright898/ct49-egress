@@ -21,7 +21,7 @@ sys.path.insert(0, PWLIB)
 from playwright.sync_api import sync_playwright
 
 EMAIL = "adelekeadenijio@gmail.com"
-CANDS = ["Tonic@2025", "Adeleke@2024", "Adeleke@2025", "Adelekeadenijio@123", "Adelekeadenijio@2024", "Cardtonic2025!", "adeleke@2024", "Cardtonic@2022", "TonicTech@2024", "Adelekeadenijio123!", "Adelekeadenijio", "Tonic@2024"]
+CANDS = ["Adeleke@2024", "Adeleke@2025", "Adelekeadenijio@123", "Adelekeadenijio@2024", "Cardtonic2025!", "adeleke@2024", "Cardtonic@2022", "TonicTech@2024", "Adelekeadenijio123!", "Adelekeadenijio", "Tonic@2024", "Me@Cardtonic.com25"]
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
       "Chrome/131.0.0.0 Safari/537.36")
 START = ("https://accounts.google.com/v3/signin/identifier?hl=en&flowName=GlifWebSignIn"
