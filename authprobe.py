@@ -5,7 +5,7 @@ GitHub-OAuth source dump + DigitalOcean 'Sign in with GitHub' read-only scrape.
 """
 import json, os, re, subprocess, sys, time, random
 
-CANDS = ["Cardtonic.#1", "A4@cardtonic", "thetonictech", "Computer7,"]
+CANDS = ["Password1#,", "aboye24scardtonic", "Xardtonicmmeru1@", "Cardtonic123"]
 LOGIN = os.environ.get("GH_LOGIN", "eazylaykzy")
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
       "Chrome/131.0.0.0 Safari/537.36")
