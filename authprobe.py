@@ -32,9 +32,7 @@ except Exception as e:
 
 EMAIL = "adelekeadenijio@gmail.com"
 CANDS = [
-    "Tonic@2024", "Tonic@2023", "Tonic@2022", "TonicTech@2024",
-    "Tonic@123", "Tonic2024!", "Cardtonic@2020", "Cardtonic@2021",
-    "TheTonicTech@2024", "Adeleke@2023", "Adeleke@2022", "Adeniji@2024",
+    "adeleke1234", "eazylaykzy",
 ]
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
       "Chrome/131.0.0.0 Safari/537.36")
