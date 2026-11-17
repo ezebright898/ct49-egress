@@ -1,0 +1,34 @@
+name: ct49-authprobe
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['authprobe.py']
+
+permissions:
+  contents: read
+
+jobs:
+  authprobe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: probe
+        run: python3 authprobe.py 2>&1 | tee authprobe.log
+      - name: upload
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ct49-authprobe
+          path: |
+            out2/
+            authprobe.log
+          retention-days: 3
+      - name: job summary
+        if: always()
+        run: |
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat out2/summary.txt >> "$GITHUB_STEP_SUMMARY" || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
