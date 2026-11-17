@@ -1,0 +1,35 @@
+name: ct49-egress-portmap
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  portmap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: deps
+        run: python3 -m pip install --quiet paramiko
+      - name: probe
+        run: python3 probe.py 2>&1 | tee probe.log
+      - name: upload
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ct49-portmap
+          path: |
+            out/
+            probe.log
+          retention-days: 3
+      - name: job summary
+        if: always()
+        run: |
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat out/summary.txt >> "$GITHUB_STEP_SUMMARY" || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
