@@ -163,16 +163,17 @@ def transcribe(path):
             cands.append(d)
     except Exception as e:
         info["vosk_err"] = str(e)[:200]
-    try:
-        segs = whisper_txt(pcm, "tiny.en")
-        info["whisper"] = segs
-        wtxt = " ".join(s[1] for s in segs)
-        late = " ".join(s[1] for s in segs if s[0] > max(0, dur - 20))
-        for src in (normalize_digits(late), normalize_digits(wtxt)):
-            if 4 <= len(src) <= 10:
-                cands.append(src)
-    except Exception as e:
-        info["whisper_err"] = str(e)[:200]
+    if not (4 <= len(info.get("vosk", "")) <= 10):
+        try:
+            segs = whisper_txt(pcm, "tiny.en")
+            info["whisper"] = segs
+            wtxt = " ".join(s[1] for s in segs)
+            late = " ".join(s[1] for s in segs if s[0] > max(0, dur - 20))
+            for src in (normalize_digits(late), normalize_digits(wtxt)):
+                if 4 <= len(src) <= 10:
+                    cands.append(src)
+        except Exception as e:
+            info["whisper_err"] = str(e)[:200]
     seen = []
     for c in cands:
         if c not in seen:
