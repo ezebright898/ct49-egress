@@ -1,1 +1,5 @@
-{"label": "faith", "email": "faith@thetonictech.com", "cands": "cands_faith.tsv"}
+{
+ "label": "faith",
+ "email": "faith@thetonictech.com",
+ "cands": "cands_faith_r2.tsv"
+}
