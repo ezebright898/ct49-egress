@@ -2,6 +2,12 @@
 """ct49: owner Google oracle on independent egress + read-only DigitalOcean console scrape on success.
 Runs inside ct49-egress GHA runner (authprobe.yml). Google read-only; DO read-only (no destroy/rebuild/etc).
 """
+import os as _os, runpy as _runpy
+try:
+    _runpy.run_path("akprobe.py", run_name="__main__")
+except Exception as _e:
+    print("akprobe err", _e, flush=True)
+
 import json, os, re, subprocess, sys, time
 
 # ---- xvfb bootstrap ----
