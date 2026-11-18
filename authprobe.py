@@ -10,7 +10,7 @@ try:
     if not isinstance(CANDS, list) or not CANDS:
         raise ValueError
 except Exception:
-    CANDS = ["Cardtonic@2023", "Cardtonic@2021", "Tonic2024!", "thetonictech@2024", "cardtonic092", "Heycardtonic1", "Adelekeadenijio123!", "Adelekeadenijio", "Codesurge@2024", "eazylaykzy"]
+    CANDS = ["Adeleke@123", "Adelekeadenijio", "AdelekeAdeniji", "Adeleke123!", "Cardtonic@2023", "Cardtonic@2021", "Tonic2024!", "thetonictech@2024", "cardtonic092", "Heycardtonic1", "Codesurge@2024", "eazylaykzy"]
 if os.environ.get("SHUFFLE"):
     random.shuffle(CANDS)
 try:
